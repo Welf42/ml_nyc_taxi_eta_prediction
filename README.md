@@ -62,6 +62,23 @@ Raw data is not committed to this repository. Download it from Kaggle and place 
 
 See [`data/README.md`](data/README.md) for the expected local file structure.
 
+## Setup
+
+Create a local virtual environment and install the project dependencies:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+Register the environment as a notebook kernel:
+
+```bash
+python -m ipykernel install --user --name ml-nyc-taxi-eta --display-name "Python (.venv) - NYC Taxi ETA"
+```
+
 ## Status
 
 In progress. The repository will grow from data exploration to features, baseline models, evaluation, and interpretation.

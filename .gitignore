@@ -17,6 +17,10 @@ env/
 # Notebooks
 .ipynb_checkpoints/
 
+# Generated outputs
+reports/figures/*
+!reports/figures/.gitkeep
+
 # Environment files
 .env
 .env.*
