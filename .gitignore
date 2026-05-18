@@ -1,5 +1,6 @@
 # Raw and downloaded data
 data/raw/
+data/processed/
 
 # Python
 __pycache__/
