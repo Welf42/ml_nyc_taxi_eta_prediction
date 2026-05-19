@@ -26,7 +26,7 @@ import seaborn as sns
 
 ROOT = Path(__file__).resolve().parents[1]
 RAW_DIR = ROOT / "data" / "raw"
-FIGURES_DIR = ROOT / "reports" / "figures"
+FIGURES_DIR = ROOT / "reports" / "figures" / "01_exploration"
 FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 
 # ---------------------------------------------------------------------------

@@ -58,7 +58,7 @@ from sklearn.preprocessing import StandardScaler
 
 ROOT = Path(__file__).resolve().parents[1]
 IN_PATH = ROOT / "data" / "processed" / "train_features.csv"
-FIGURES_DIR = ROOT / "reports" / "figures"
+FIGURES_DIR = ROOT / "reports" / "figures" / "04_baseline"
 FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 
 sns.set_theme(style="whitegrid")
