@@ -19,8 +19,11 @@ env/
 .ipynb_checkpoints/
 
 # Generated outputs
-reports/figures/*
-!reports/figures/.gitkeep
+reports/figures/**/*.png
+reports/page_content.md
+
+# Local portfolio and documentation drafts
+docs/
 
 # Environment files
 .env
