@@ -30,6 +30,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from matplotlib.colors import LinearSegmentedColormap
 from sklearn.metrics import root_mean_squared_error
 
 # ---------------------------------------------------------------------------
@@ -176,29 +177,61 @@ day_rmse = segment_rmse(df, "day_type")
 print("\n--- RMSE by day type ---")
 print(day_rmse.to_string(index=False))
 
-fig, ax = plt.subplots(figsize=(6, 4))
-rmse_bar(ax, day_rmse, "Prediction error by day type", "Day type", "#F28E2B")
+fig, ax = plt.subplots(figsize=(8, 4))
+rmse_bar(ax, day_rmse, "RMSE by day type", AMBER)
 fig.tight_layout()
-fig.savefig(FIGURES_DIR / "error_by_day_type.png", dpi=150, bbox_inches="tight")
+fig.savefig(FIGURES_DIR / "error_by_day_type.png", dpi=200, bbox_inches="tight", facecolor=BG)
 plt.close(fig)
 print("Saved: error_by_day_type.png")
 
+
 # ---------------------------------------------------------------------------
-# 4. Summary panel — all three segments in one figure
+# 4. By pickup location — hexbin map of mean absolute error
 # ---------------------------------------------------------------------------
 
-fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+NYC_BOUNDS = {"min_lon": -74.05, "max_lon": -73.75, "min_lat": 40.60, "max_lat": 40.90}
+df["abs_residual"] = df["residual"].abs()
 
-rmse_bar(axes[0], dist_rmse, "By distance",   "Distance bucket", "#4C78A8")
-rmse_bar(axes[1], hour_rmse, "By time of day", "Time of day",    "#59A14F")
-rmse_bar(axes[2], day_rmse,  "By day type",    "Day type",       "#F28E2B")
+mask = (
+    df["pickup_longitude"].between(NYC_BOUNDS["min_lon"], NYC_BOUNDS["max_lon"]) &
+    df["pickup_latitude"].between(NYC_BOUNDS["min_lat"],  NYC_BOUNDS["max_lat"])
+)
+df_map = df[mask]
 
-fig.suptitle("Where does the model struggle?  (red line = global RMSE)",
-             fontsize=14, fontweight="bold")
-fig.tight_layout()
-fig.savefig(FIGURES_DIR / "error_summary.png", dpi=150, bbox_inches="tight")
+fig, ax = plt.subplots(figsize=(8, 8), facecolor=BG)
+ax.set_facecolor(BG)
+
+hb = ax.hexbin(
+    df_map["pickup_longitude"], df_map["pickup_latitude"],
+    C=df_map["abs_residual"],
+    reduce_C_function=np.mean,
+    gridsize=60,
+    cmap=ERROR_CMAP,
+    mincnt=50,
+    linewidths=0.1,
+)
+
+cb = fig.colorbar(hb, ax=ax, pad=0.02)
+cb.set_label("Mean absolute error  (log scale)", color=FAINT, fontsize=9)
+cb.ax.tick_params(colors=FAINT)
+
+ax.set_xlim(NYC_BOUNDS["min_lon"], NYC_BOUNDS["max_lon"])
+ax.set_ylim(NYC_BOUNDS["min_lat"], NYC_BOUNDS["max_lat"])
+ax.set_title("Prediction error — by pickup location", color=FG, pad=14)
+ax.set_xlabel("Longitude", color=FAINT, fontsize=9)
+ax.set_ylabel("Latitude",  color=FAINT, fontsize=9)
+ax.tick_params(colors=FAINT, labelsize=8)
+for spine in ax.spines.values():
+    spine.set_color(GRID)
+
+fig.text(0.5, 0.01,
+         f"Each cell shows mean absolute error for ≥ 50 trips  ·  {len(df_map):,} validation trips",
+         ha="center", color=FAINT, fontsize=8)
+
+fig.tight_layout(rect=[0, 0.03, 1, 1])
+fig.savefig(FIGURES_DIR / "error_by_location.png", dpi=200, bbox_inches="tight", facecolor=BG)
 plt.close(fig)
-print("Saved: error_summary.png")
+print("Saved: error_by_location.png")
 
 # ---------------------------------------------------------------------------
 # Findings

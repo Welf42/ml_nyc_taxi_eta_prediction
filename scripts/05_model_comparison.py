@@ -30,6 +30,7 @@ import pandas as pd
 import seaborn as sns
 import xgboost as xgb
 from sklearn.ensemble import HistGradientBoostingRegressor, RandomForestRegressor
+from sklearn.inspection import permutation_importance
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import root_mean_squared_error
 from sklearn.preprocessing import StandardScaler
@@ -192,17 +193,85 @@ print("\nSaved: model_comparison.png")
 # Feature importance — LightGBM (best model)
 # ---------------------------------------------------------------------------
 
-labels = [FEATURE_LABELS[f] for f in FEATURES]
-lgbm_imp = pd.Series(lgbm.feature_importances_, index=labels).sort_values()
+# Order features by absolute OLS coefficient — same ordering used in the coefficients plot
+ols_abs_order = (
+    pd.Series(ols.coef_, index=FEATURES)
+    .sort_values(ascending=True)   # ascending → most negative first → top of barh = most positive
+    .index
+)
+labels_ordered = [FEATURE_LABELS[f] for f in ols_abs_order]
+lgbm_imp = pd.Series(lgbm.feature_importances_,
+                     index=[FEATURE_LABELS[f] for f in FEATURES]).reindex(labels_ordered)
 
 fig, ax = plt.subplots(figsize=(8, 5))
-ax.barh(lgbm_imp.index, lgbm_imp.values, color="#59A14F", height=0.6, edgecolor="white")
+ax.barh(lgbm_imp.index, lgbm_imp.values, color=GREEN, height=0.6, edgecolor=BG)
+ax.set_xlim(left=0)
 ax.set_title("LightGBM — feature importance")
 ax.set_xlabel("Split gain")
 fig.tight_layout()
-fig.savefig(FIGURES_DIR / "feature_importance.png", dpi=150, bbox_inches="tight")
+fig.savefig(FIGURES_DIR / "lgbm_split_gain.png", dpi=200, bbox_inches="tight", facecolor=BG)
 plt.close(fig)
-print("Saved: feature_importance.png")
+print("Saved: lgbm_split_gain.png")
+
+# ---------------------------------------------------------------------------
+# Permutation importance — LightGBM on validation set
+# ---------------------------------------------------------------------------
+
+rng = np.random.default_rng(42)
+sample_idx = rng.choice(len(X_val), size=min(10_000, len(X_val)), replace=False)
+X_perm = X_val.iloc[sample_idx]
+y_perm = y_val.iloc[sample_idx]
+
+perm = permutation_importance(
+    lgbm, X_perm, y_perm,
+    n_repeats=5, random_state=42, n_jobs=-1,
+    scoring="neg_root_mean_squared_error",
+)
+perm_imp = (
+    pd.Series(perm.importances_mean, index=[FEATURE_LABELS[f] for f in FEATURES])
+    .reindex(labels_ordered)
+)
+
+fig, ax = plt.subplots(figsize=(8, 5))
+ax.barh(perm_imp.index, perm_imp.values, color=AMBER, height=0.6, edgecolor=BG)
+ax.set_xlim(left=0)
+ax.set_title("LightGBM — permutation importance")
+ax.set_xlabel("Mean RMSE increase when feature is shuffled")
+fig.tight_layout()
+fig.savefig(FIGURES_DIR / "lgbm_permutation.png", dpi=200, bbox_inches="tight", facecolor=BG)
+plt.close(fig)
+print("Saved: lgbm_permutation.png")
+
+# ---------------------------------------------------------------------------
+# OLS vs permutation importance — side-by-side comparison (both normalised 0–1)
+# ---------------------------------------------------------------------------
+
+ols_abs = (
+    pd.Series(np.abs(ols.coef_), index=[FEATURE_LABELS[f] for f in FEATURES])
+    .reindex(labels_ordered)
+)
+ols_norm  = ols_abs  / ols_abs.max()
+perm_norm = perm_imp / perm_imp.max()
+
+features  = ols_norm.index.tolist()
+n         = len(features)
+y         = np.arange(n)
+height    = 0.35
+
+fig, ax = plt.subplots(figsize=(9, 5))
+ax.barh(y + height / 2, ols_norm.values,  height=height, color=CYAN,  label="OLS  |coefficient|",    edgecolor=BG)
+ax.barh(y - height / 2, perm_norm.values, height=height, color=AMBER, label="Permutation importance", edgecolor=BG)
+
+ax.set_yticks(y)
+ax.set_yticklabels(features)
+ax.set_xlim(left=0)
+ax.set_xlabel("Normalised importance  (0 = least, 1 = most)")
+ax.set_title("OLS vs LightGBM — what each method sees")
+ax.legend(fontsize=9, loc="lower right")
+fig.tight_layout()
+fig.savefig(FIGURES_DIR / "ols_vs_lgbm.png", dpi=200, bbox_inches="tight", facecolor=BG)
+plt.close(fig)
+print("Saved: ols_vs_lgbm.png")
 
 # ---------------------------------------------------------------------------
 # Save best model and val predictions for downstream scripts
@@ -218,6 +287,7 @@ print(f"Saved: models/best_model.joblib  ({best_name})")
 
 val_out = val_df[["id", "pickup_datetime", "haversine_km",
                    "pickup_hour", "pickup_weekday", "is_weekend",
+                   "pickup_longitude", "pickup_latitude",
                    "trip_duration", "log_trip_duration"]].copy()
 val_out["predicted_log"] = best["pred"]
 val_out["residual"]      = val_out["log_trip_duration"] - val_out["predicted_log"]
