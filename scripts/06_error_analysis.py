@@ -14,14 +14,14 @@ Why this matters (for presentation):
   model is reliable and where it is not — which is what matters for a real
   transport planning application.
 
-Input : data/processed/val_predictions.csv  (written by 06_model_advanced.py)
+Input : data/processed/val_predictions.csv  (written by 05_model_comparison.py)
 Output: reports/figures/error_by_distance.png
         reports/figures/error_by_hour_bucket.png
         reports/figures/error_by_day_type.png
         reports/figures/error_summary.png
 
 Run from the project root:
-    python3 scripts/07_error_analysis.py
+    python3 scripts/06_error_analysis.py
 """
 
 from pathlib import Path
@@ -33,6 +33,8 @@ import seaborn as sns
 from matplotlib.colors import LinearSegmentedColormap
 from sklearn.metrics import root_mean_squared_error
 
+from styles import BG, FG, FAINT, GRID, CYAN, AMBER, GREEN, RED, apply_theme
+
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
@@ -42,43 +44,11 @@ IN_PATH = ROOT / "data" / "processed" / "val_predictions.csv"
 FIGURES_DIR = ROOT / "figures" / "06_evaluation"
 FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 
-BG    = "#0d1117"
-FG    = "#F9FAFB"
-FAINT = "#D1D5DB"
-GRID  = "#1E2736"
-CYAN  = "#22D3EE"
-AMBER = "#F59E0B"
-GREEN = "#10B981"
-RED   = "#F87171"
+apply_theme()
 
 ERROR_CMAP = LinearSegmentedColormap.from_list(
     "portfolio_error", [GRID, CYAN, AMBER, RED]
 )
-
-plt.rcParams.update({
-    "font.family":       "sans-serif",
-    "axes.titlesize":    13,
-    "axes.titleweight":  "bold",
-    "axes.labelsize":    11,
-    "xtick.labelsize":   10,
-    "ytick.labelsize":   10,
-    "axes.spines.top":   False,
-    "axes.spines.right": False,
-    "figure.facecolor":  BG,
-    "axes.facecolor":    BG,
-    "axes.edgecolor":    GRID,
-    "text.color":        FG,
-    "axes.labelcolor":   FG,
-    "xtick.color":       FAINT,
-    "ytick.color":       FAINT,
-    "axes.titlecolor":   FG,
-    "axes.grid":         True,
-    "grid.color":        GRID,
-    "grid.linewidth":    0.6,
-    "legend.facecolor":  "#1E2736",
-    "legend.edgecolor":  GRID,
-    "legend.labelcolor": FG,
-})
 
 # ---------------------------------------------------------------------------
 # Load
