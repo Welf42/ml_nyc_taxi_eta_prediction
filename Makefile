@@ -28,6 +28,6 @@ pipeline: install
 # ---------------------------------------------------------------------------
 
 clean:
-	rm -rf data/processed reports/figures/*.png
+	rm -rf data/processed figures models
 
 .PHONY: install pipeline clean

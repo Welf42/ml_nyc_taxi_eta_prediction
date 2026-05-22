@@ -18,13 +18,6 @@ __pycache__/
 venv/
 env/
 
-# Notebooks
-.ipynb_checkpoints/
-
-# Generated outputs
-reports/figures/**/*.png
-reports/page_content.md
-
 # Local portfolio and documentation drafts
 docs/
 
