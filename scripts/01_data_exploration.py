@@ -16,6 +16,7 @@ Run from the project root:
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -26,7 +27,7 @@ import seaborn as sns
 
 ROOT = Path(__file__).resolve().parents[1]
 RAW_DIR = ROOT / "data" / "raw"
-FIGURES_DIR = ROOT / "reports" / "figures" / "01_exploration"
+FIGURES_DIR = ROOT / "figures" / "01_exploration"
 FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 
 # ---------------------------------------------------------------------------
@@ -69,8 +70,17 @@ train = train.assign(
     log_trip_duration=np.log1p(train["trip_duration"]),
 )
 
-sns.set_theme(style="whitegrid")
 pd.set_option("display.max_columns", 50)
+
+BG    = "#0d1117"
+FG    = "#F9FAFB"
+FAINT = "#D1D5DB"
+GRID  = "#1E2736"
+CYAN  = "#22D3EE"
+AMBER = "#F59E0B"
+GREEN = "#10B981"
+RED   = "#F87171"
+
 plt.rcParams.update({
     "font.family":       "sans-serif",
     "axes.titlesize":    13,
@@ -80,30 +90,49 @@ plt.rcParams.update({
     "ytick.labelsize":   10,
     "axes.spines.top":   False,
     "axes.spines.right": False,
+    "figure.facecolor":  BG,
+    "axes.facecolor":    BG,
+    "axes.edgecolor":    GRID,
+    "text.color":        FG,
+    "axes.labelcolor":   FG,
+    "xtick.color":       FAINT,
+    "ytick.color":       FAINT,
+    "axes.titlecolor":   FG,
+    "axes.grid":         True,
+    "grid.color":        GRID,
+    "grid.linewidth":    0.6,
+    "legend.facecolor":  "#1E2736",
+    "legend.edgecolor":  GRID,
+    "legend.labelcolor": FG,
 })
 
 fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
 upper_99 = train["trip_duration_min"].quantile(0.99)
+median_min = train["trip_duration_min"].median()
 sns.histplot(
     train.loc[train["trip_duration_min"] <= upper_99, "trip_duration_min"],
-    bins=60, ax=axes[0], color="#4C78A8", edgecolor="white", linewidth=0.3,
+    bins=60, ax=axes[0], color=CYAN, edgecolor=BG, linewidth=0.3,
 )
-axes[0].set_title("Trip duration distribution")
+axes[0].axvline(median_min, color=RED, linewidth=1.5, linestyle="--")
+axes[0].text(median_min + 0.5, axes[0].get_ylim()[1] * 0.92,
+             f"Median: {median_min:.0f} min", color=RED, fontsize=9)
+axes[0].set_title("Trip duration — raw")
 axes[0].set_xlabel("Duration (minutes)  —  clipped at 99th percentile")
 axes[0].set_ylabel("Trips")
+axes[0].yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"{int(x):,}"))
 
 sns.histplot(train["log_trip_duration"], bins=60, ax=axes[1],
-             color="#59A14F", edgecolor="white", linewidth=0.3)
-axes[1].set_title("Log-transformed trip duration")
-axes[1].set_xlabel("log(1 + duration seconds)")
+             color=GREEN, edgecolor=BG, linewidth=0.3)
+axes[1].set_title("Trip duration — log scale")
+axes[1].set_xlabel("log(1 + duration in seconds)")
 axes[1].set_ylabel("Trips")
+axes[1].yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"{int(x):,}"))
 
-fig.suptitle("Target variable: trip_duration", fontsize=14, fontweight="bold")
 fig.tight_layout()
-fig.savefig(FIGURES_DIR / "trip_duration_distribution.png", dpi=150, bbox_inches="tight")
+fig.savefig(FIGURES_DIR / "trips_by_duration.png", dpi=200, bbox_inches="tight", facecolor=BG)
 plt.close(fig)
-print("Saved: trip_duration_distribution.png")
+print("Saved: trips_by_duration.png")
 
 # ---------------------------------------------------------------------------
 # Time patterns
@@ -119,20 +148,21 @@ weekday_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturd
 
 fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
-sns.countplot(data=train, x="pickup_hour", ax=axes[0], color="#4C78A8")
+sns.countplot(data=train, x="pickup_hour", ax=axes[0], color=CYAN)
 axes[0].set_title("Trips by pickup hour")
 axes[0].set_xlabel("Hour of day")
 axes[0].set_ylabel("Trips")
+axes[0].yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"{int(x):,}"))
 
-sns.countplot(data=train, x="pickup_weekday", order=weekday_order, ax=axes[1], color="#59A14F")
+sns.countplot(data=train, x="pickup_weekday", order=weekday_order, ax=axes[1], color=AMBER)
 axes[1].set_title("Trips by weekday")
 axes[1].set_xlabel("")
 axes[1].set_ylabel("Trips")
 axes[1].tick_params(axis="x", rotation=35)
+axes[1].yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"{int(x):,}"))
 
-fig.suptitle("Temporal patterns in trip volume", fontsize=14, fontweight="bold")
 fig.tight_layout()
-fig.savefig(FIGURES_DIR / "trips_by_time.png", dpi=150, bbox_inches="tight")
+fig.savefig(FIGURES_DIR / "trips_by_time.png", dpi=200, bbox_inches="tight", facecolor=BG)
 plt.close(fig)
 print("Saved: trips_by_time.png")
 
@@ -143,23 +173,16 @@ print("Saved: trips_by_time.png")
 print("\n--- Passenger count distribution ---")
 print(train["passenger_count"].value_counts().sort_index().to_frame("trips").to_string())
 
-fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-
-sns.countplot(data=train, x="passenger_count", ax=axes[0], color="#F28E2B")
-axes[0].set_title("Trips by passenger count")
-axes[0].set_xlabel("Passenger count")
-axes[0].set_ylabel("Trips")
-
-sns.countplot(data=train, x="store_and_fwd_flag", ax=axes[1], color="#E15759")
-axes[1].set_title("Store-and-forward flag")
-axes[1].set_xlabel("N = recorded live  ·  Y = stored offline")
-axes[1].set_ylabel("Trips")
-
-fig.suptitle("Data quality checks", fontsize=14, fontweight="bold")
+fig, ax = plt.subplots(figsize=(8, 5))
+sns.countplot(data=train, x="passenger_count", ax=ax, color=GREEN)
+ax.set_title("Trips by passenger count")
+ax.set_xlabel("Passenger count")
+ax.set_ylabel("Trips")
+ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"{int(x):,}"))
 fig.tight_layout()
-fig.savefig(FIGURES_DIR / "passenger_and_flag_counts.png", dpi=150, bbox_inches="tight")
+fig.savefig(FIGURES_DIR / "trips_by_passengers.png", dpi=200, bbox_inches="tight", facecolor=BG)
 plt.close(fig)
-print("Saved: passenger_and_flag_counts.png")
+print("Saved: trips_by_passengers.png")
 
 # ---------------------------------------------------------------------------
 # Location ranges
@@ -173,20 +196,32 @@ NYC_BOUNDS = {"min_lon": -74.30, "max_lon": -73.60, "min_lat": 40.45, "max_lat":
 
 sample = train.sample(n=min(50_000, len(train)), random_state=42)
 
-fig, ax = plt.subplots(figsize=(7, 7))
-ax.scatter(sample["pickup_longitude"], sample["pickup_latitude"], s=1, alpha=0.15, label="Pickup")
-ax.scatter(sample["dropoff_longitude"], sample["dropoff_latitude"], s=1, alpha=0.15, label="Dropoff")
+fig, ax = plt.subplots(figsize=(8, 8), facecolor=BG)
+ax.set_facecolor(BG)
+
+ax.scatter(sample["pickup_longitude"], sample["pickup_latitude"],
+           s=0.4, alpha=0.35, color="#00B4D8", label="Pickup", rasterized=True)
+ax.scatter(sample["dropoff_longitude"], sample["dropoff_latitude"],
+           s=0.4, alpha=0.35, color="#FF6B6B", label="Dropoff", rasterized=True)
+
 ax.set_xlim(NYC_BOUNDS["min_lon"], NYC_BOUNDS["max_lon"])
 ax.set_ylim(NYC_BOUNDS["min_lat"], NYC_BOUNDS["max_lat"])
-ax.set_title("Sampled pickup and dropoff locations around NYC")
-ax.set_xlabel("Longitude")
-ax.set_ylabel("Latitude")
-ax.legend(markerscale=5)
+ax.set_title("Pickup and dropoff locations — NYC", color="white", pad=14, fontsize=14, fontweight="bold")
+ax.set_xlabel("Longitude", color="#888888", fontsize=10)
+ax.set_ylabel("Latitude",  color="#888888", fontsize=10)
+ax.tick_params(colors="#555555", labelsize=9)
+for spine in ax.spines.values():
+    spine.set_color("#222222")
+
+ax.legend(markerscale=10, fontsize=10,
+          facecolor="#1E2736", edgecolor=GRID, labelcolor=FG)
+ax.text(0.02, 0.02, f"{len(sample):,} sampled trips",
+        transform=ax.transAxes, color="#555555", fontsize=9, va="bottom")
 
 fig.tight_layout()
-fig.savefig(FIGURES_DIR / "sampled_trip_locations.png", dpi=150, bbox_inches="tight")
+fig.savefig(FIGURES_DIR / "trips_by_location.png", dpi=200, bbox_inches="tight", facecolor=BG)
 plt.close(fig)
-print("Saved: sampled_trip_locations.png")
+print("Saved: trips_by_location.png")
 
 # ---------------------------------------------------------------------------
 # Candidate cleaning rules

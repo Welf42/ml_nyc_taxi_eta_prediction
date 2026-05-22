@@ -58,19 +58,41 @@ from sklearn.preprocessing import StandardScaler
 
 ROOT = Path(__file__).resolve().parents[1]
 IN_PATH = ROOT / "data" / "processed" / "train_features.csv"
-FIGURES_DIR = ROOT / "reports" / "figures" / "04_baseline"
+FIGURES_DIR = ROOT / "figures" / "04_baseline"
 FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 
-sns.set_theme(style="whitegrid")
+BG    = "#0d1117"
+FG    = "#F9FAFB"
+FAINT = "#D1D5DB"
+GRID  = "#1E2736"
+CYAN  = "#22D3EE"
+AMBER = "#F59E0B"
+GREEN = "#10B981"
+RED   = "#F87171"
+
 plt.rcParams.update({
-    "font.family":      "sans-serif",
-    "axes.titlesize":   13,
-    "axes.titleweight": "bold",
-    "axes.labelsize":   11,
-    "xtick.labelsize":  10,
-    "ytick.labelsize":  10,
-    "axes.spines.top":  False,
+    "font.family":       "sans-serif",
+    "axes.titlesize":    13,
+    "axes.titleweight":  "bold",
+    "axes.labelsize":    11,
+    "xtick.labelsize":   10,
+    "ytick.labelsize":   10,
+    "axes.spines.top":   False,
     "axes.spines.right": False,
+    "figure.facecolor":  BG,
+    "axes.facecolor":    BG,
+    "axes.edgecolor":    GRID,
+    "text.color":        FG,
+    "axes.labelcolor":   FG,
+    "xtick.color":       FAINT,
+    "ytick.color":       FAINT,
+    "axes.titlecolor":   FG,
+    "axes.grid":         True,
+    "grid.color":        GRID,
+    "grid.linewidth":    0.6,
+    "legend.facecolor":  "#1E2736",
+    "legend.edgecolor":  GRID,
+    "legend.labelcolor": FG,
 })
 
 # ---------------------------------------------------------------------------
@@ -146,7 +168,7 @@ print(f"R²                 : {ols.score(X_val_sc, y_val):.4f}")
 
 coef_df = (
     pd.Series(ols.coef_, index=FEATURES, name="coefficient")
-    .sort_values(key=abs, ascending=False)
+    .sort_values(ascending=False)
     .to_frame()
 )
 coef_df["direction"] = coef_df["coefficient"].apply(lambda x: "longer trip" if x > 0 else "shorter trip")
@@ -169,28 +191,29 @@ FEATURE_LABELS = {
 coef_plot = coef_df.copy()
 coef_plot.index = [FEATURE_LABELS.get(i, i) for i in coef_plot.index]
 
-fig, ax = plt.subplots(figsize=(8, 5))
-colors = ["#4C78A8" if v >= 0 else "#E15759" for v in coef_plot["coefficient"]]
-bars = ax.barh(
-    coef_plot.index[::-1],
-    coef_plot["coefficient"][::-1],
-    color=colors[::-1],
-    height=0.6,
-    edgecolor="white",
-)
-for bar, val in zip(bars, coef_plot["coefficient"][::-1]):
-    offset = 0.005 if val >= 0 else -0.005
-    ha = "left" if val >= 0 else "right"
-    ax.text(val + offset, bar.get_y() + bar.get_height() / 2,
-            f"{val:+.3f}", va="center", ha=ha, fontsize=9, color="#333333")
-ax.axvline(0, color="#333333", linewidth=0.8)
-ax.set_title("What predicts a longer trip?")
-ax.set_xlabel("OLS coefficient (standardised features)")
-ax.text(0.98, 0.02, "Blue = longer  ·  Red = shorter",
-        transform=ax.transAxes, ha="right", va="bottom",
-        fontsize=9, color="#666666")
+labels_rev = coef_plot.index[::-1].tolist()
+vals_rev   = coef_plot["coefficient"][::-1].tolist()
+colors_rev = [CYAN if v >= 0 else RED for v in vals_rev]
+
+fig, ax = plt.subplots(figsize=(9, 5))
+bars = ax.barh(labels_rev, vals_rev, color=colors_rev, height=0.6, edgecolor="white")
+
+for bar, val in zip(bars, vals_rev):
+    if val >= 0:
+        ax.text(val + 0.005, bar.get_y() + bar.get_height() / 2,
+                f"{val:+.3f}", va="center", ha="left", fontsize=9, color=FG)
+    else:
+        ax.text(val - 0.005, bar.get_y() + bar.get_height() / 2,
+                f"{val:+.3f}", va="center", ha="right", fontsize=9, color=FG)
+
+# Pin spine to physical left edge so tick labels land in the figure margin, not inside the axes
+ax.spines["left"].set_position(("axes", 0))
+ax.set_xlim(-0.15, max(vals_rev) * 1.22)
+ax.axvline(0, color=FAINT, linewidth=0.8)
+ax.set_title("OLS regression coefficients")
+ax.set_xlabel("Standardised coefficient  (cyan = positive, red = negative)")
 fig.tight_layout()
-fig.savefig(FIGURES_DIR / "ols_coefficients.png", dpi=150, bbox_inches="tight")
+fig.savefig(FIGURES_DIR / "ols_coefficients.png", dpi=200, bbox_inches="tight", facecolor=BG)
 plt.close(fig)
 print("\nSaved: ols_coefficients.png")
 
@@ -200,49 +223,45 @@ print("\nSaved: ols_coefficients.png")
 
 residuals = y_val - ols_pred
 
-fig, axes = plt.subplots(1, 3, figsize=(16, 5))
-
 # 1 — Residual distribution
-sns.histplot(residuals, bins=80, ax=axes[0], color="#4C78A8", edgecolor="white", linewidth=0.3)
-axes[0].axvline(0, color="#E15759", linewidth=1.5, linestyle="--", label="Zero error")
-axes[0].set_title("Residual distribution")
-axes[0].set_xlabel("Actual − Predicted  (log scale)")
-axes[0].set_ylabel("Count")
-axes[0].legend(fontsize=9)
-axes[0].text(0.97, 0.97, "Should be centred at 0",
-             transform=axes[0].transAxes, ha="right", va="top",
-             fontsize=9, color="#666666")
-
-# 2 — Residuals vs. predicted (hexbin instead of overplotted scatter)
-hb = axes[1].hexbin(ols_pred, residuals, gridsize=60, cmap="Blues", mincnt=1, linewidths=0.1)
-axes[1].axhline(0, color="#E15759", linewidth=1.5, linestyle="--")
-axes[1].set_title("Residuals vs. predicted")
-axes[1].set_xlabel("Predicted  log(trip_duration)")
-axes[1].set_ylabel("Residual")
-fig.colorbar(hb, ax=axes[1], label="Trips")
-axes[1].text(0.97, 0.97, "Random scatter = good fit",
-             transform=axes[1].transAxes, ha="right", va="top",
-             fontsize=9, color="#666666")
-
-# 3 — Actual vs. predicted (hexbin)
-lims = [y_val.min(), y_val.max()]
-hb2 = axes[2].hexbin(y_val, ols_pred, gridsize=60, cmap="Greens", mincnt=1, linewidths=0.1)
-axes[2].plot(lims, lims, color="#E15759", linewidth=1.5, linestyle="--", label="Perfect prediction")
-axes[2].set_title("Actual vs. predicted")
-axes[2].set_xlabel("Actual  log(trip_duration)")
-axes[2].set_ylabel("Predicted  log(trip_duration)")
-axes[2].legend(fontsize=9)
-fig.colorbar(hb2, ax=axes[2], label="Trips")
-axes[2].text(0.05, 0.95, f"RMSE = {ols_rmse:.4f}",
-             transform=axes[2].transAxes, ha="left", va="top",
-             fontsize=10, color="#333333",
-             bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="#cccccc"))
-
-fig.suptitle("OLS regression — residual diagnostics", fontsize=14, fontweight="bold", y=1.02)
+fig, ax = plt.subplots(figsize=(8, 5))
+sns.histplot(residuals, bins=80, ax=ax, color=CYAN, edgecolor=BG, linewidth=0.3)
+ax.axvline(0, color=RED, linewidth=1.5, linestyle="--")
+ax.set_title("OLS — residual distribution")
+ax.set_xlabel("Actual − Predicted  (log scale)")
+ax.set_ylabel("Count")
 fig.tight_layout()
-fig.savefig(FIGURES_DIR / "ols_residuals.png", dpi=150, bbox_inches="tight")
+fig.savefig(FIGURES_DIR / "ols_residuals_distribution.png", dpi=200, bbox_inches="tight", facecolor=BG)
 plt.close(fig)
-print("Saved: ols_residuals.png")
+print("Saved: ols_residuals_distribution.png")
+
+# 2 — Residuals vs. predicted
+fig, ax = plt.subplots(figsize=(8, 5))
+hb = ax.hexbin(ols_pred, residuals, gridsize=60, cmap="YlGnBu", mincnt=1, linewidths=0.1)
+ax.axhline(0, color=RED, linewidth=1.5, linestyle="--")
+ax.set_title("OLS — residuals vs. predicted")
+ax.set_xlabel("Predicted  (log scale)")
+ax.set_ylabel("Residual")
+fig.colorbar(hb, ax=ax, label="Trips")
+fig.tight_layout()
+fig.savefig(FIGURES_DIR / "ols_residuals_vs_predicted.png", dpi=200, bbox_inches="tight", facecolor=BG)
+plt.close(fig)
+print("Saved: ols_residuals_vs_predicted.png")
+
+# 3 — Actual vs. predicted
+fig, ax = plt.subplots(figsize=(8, 5))
+lims = [y_val.min(), y_val.max()]
+hb2 = ax.hexbin(y_val, ols_pred, gridsize=60, cmap="plasma", mincnt=1, linewidths=0.1)
+ax.plot(lims, lims, color=RED, linewidth=1.5, linestyle="--", label="Perfect prediction")
+ax.set_title("OLS — actual vs. predicted")
+ax.set_xlabel("Actual  (log scale)")
+ax.set_ylabel("Predicted  (log scale)")
+ax.legend(fontsize=9)
+fig.colorbar(hb2, ax=ax, label="Trips")
+fig.tight_layout()
+fig.savefig(FIGURES_DIR / "ols_actual_vs_predicted.png", dpi=200, bbox_inches="tight", facecolor=BG)
+plt.close(fig)
+print("Saved: ols_actual_vs_predicted.png")
 
 # ---------------------------------------------------------------------------
 # Summary table + RMSE comparison chart

@@ -38,10 +38,22 @@ from sklearn.metrics import root_mean_squared_error
 
 ROOT = Path(__file__).resolve().parents[1]
 IN_PATH = ROOT / "data" / "processed" / "val_predictions.csv"
-FIGURES_DIR = ROOT / "reports" / "figures" / "06_error_analysis"
+FIGURES_DIR = ROOT / "figures" / "06_evaluation"
 FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 
-sns.set_theme(style="whitegrid")
+BG    = "#0d1117"
+FG    = "#F9FAFB"
+FAINT = "#D1D5DB"
+GRID  = "#1E2736"
+CYAN  = "#22D3EE"
+AMBER = "#F59E0B"
+GREEN = "#10B981"
+RED   = "#F87171"
+
+ERROR_CMAP = LinearSegmentedColormap.from_list(
+    "portfolio_error", [GRID, CYAN, AMBER, RED]
+)
+
 plt.rcParams.update({
     "font.family":       "sans-serif",
     "axes.titlesize":    13,
@@ -51,6 +63,20 @@ plt.rcParams.update({
     "ytick.labelsize":   10,
     "axes.spines.top":   False,
     "axes.spines.right": False,
+    "figure.facecolor":  BG,
+    "axes.facecolor":    BG,
+    "axes.edgecolor":    GRID,
+    "text.color":        FG,
+    "axes.labelcolor":   FG,
+    "xtick.color":       FAINT,
+    "ytick.color":       FAINT,
+    "axes.titlecolor":   FG,
+    "axes.grid":         True,
+    "grid.color":        GRID,
+    "grid.linewidth":    0.6,
+    "legend.facecolor":  "#1E2736",
+    "legend.edgecolor":  GRID,
+    "legend.labelcolor": FG,
 })
 
 # ---------------------------------------------------------------------------
@@ -69,23 +95,25 @@ print(f"Global RMSE: {global_rmse:.4f}")
 
 def segment_rmse(df, segment_col):
     rows = []
-    for name, group in df.groupby(segment_col, observed=True):
+    for name, group in df.groupby(segment_col, observed=True, sort=True):
         rmse = root_mean_squared_error(group["log_trip_duration"], group["predicted_log"])
         rows.append({"segment": name, "rmse": rmse, "n_trips": len(group)})
-    return pd.DataFrame(rows).sort_values("segment")
+    return pd.DataFrame(rows)  # groupby on ordered Categorical preserves category order
 
 
-def rmse_bar(ax, seg_df, title, xlabel, color):
-    bars = ax.bar(seg_df["segment"].astype(str), seg_df["rmse"],
-                  color=color, edgecolor="white", width=0.6)
-    ax.bar_label(bars, fmt="%.3f", padding=3, fontsize=9, color="#333333")
-    ax.axhline(global_rmse, color="#E15759", linewidth=1.2,
-               linestyle="--", label=f"Global RMSE ({global_rmse:.3f})")
+def rmse_bar(ax, seg_df, title, color):
+    seg = seg_df["segment"].astype(str)
+    bars = ax.barh(seg[::-1], seg_df["rmse"][::-1],
+                   color=color, edgecolor=BG, height=0.55)
+    for bar, val in zip(bars, seg_df["rmse"][::-1]):
+        ax.text(val + 0.004, bar.get_y() + bar.get_height() / 2,
+                f"{val:.3f}", va="center", ha="left", fontsize=9, color=FG)
+    ax.axvline(global_rmse, color=RED, linewidth=1.2,
+               linestyle="--", label=f"Global  {global_rmse:.3f}")
     ax.set_title(title)
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel("RMSE  (log scale)")
-    ax.set_ylim(0, seg_df["rmse"].max() * 1.25)
-    ax.legend(fontsize=9)
+    ax.set_xlabel("RMSE  (log scale)")
+    ax.set_xlim(0, seg_df["rmse"].max() * 1.2)
+    ax.legend(fontsize=9, loc="lower right")
 
 # ---------------------------------------------------------------------------
 # 1. By distance bucket
@@ -94,17 +122,17 @@ def rmse_bar(ax, seg_df, title, xlabel, color):
 df["distance_bucket"] = pd.cut(
     df["haversine_km"],
     bins=[0, 1, 3, 7, np.inf],
-    labels=["Short\n(<1 km)", "Medium\n(1–3 km)", "Long\n(3–7 km)", "Very long\n(>7 km)"],
+    labels=["Short (<1 km)", "Medium (1–3 km)", "Long (3–7 km)", "Very long (>7 km)"],
 )
 
 dist_rmse = segment_rmse(df, "distance_bucket")
 print("\n--- RMSE by distance ---")
 print(dist_rmse.to_string(index=False))
 
-fig, ax = plt.subplots(figsize=(8, 5))
-rmse_bar(ax, dist_rmse, "Prediction error by trip distance", "Distance bucket", "#4C78A8")
+fig, ax = plt.subplots(figsize=(8, 4))
+rmse_bar(ax, dist_rmse, "RMSE by trip distance", CYAN)
 fig.tight_layout()
-fig.savefig(FIGURES_DIR / "error_by_distance.png", dpi=150, bbox_inches="tight")
+fig.savefig(FIGURES_DIR / "error_by_distance.png", dpi=200, bbox_inches="tight", facecolor=BG)
 plt.close(fig)
 print("Saved: error_by_distance.png")
 
@@ -113,14 +141,14 @@ print("Saved: error_by_distance.png")
 # ---------------------------------------------------------------------------
 
 def hour_bucket(h):
-    if 0 <= h < 6:   return "Night\n(0–6 h)"
-    if 6 <= h < 10:  return "Morning\n(6–10 h)"
-    if 10 <= h < 16: return "Midday\n(10–16 h)"
-    if 16 <= h < 20: return "Evening\n(16–20 h)"
-    return "Late night\n(20–24 h)"
+    if 0 <= h < 6:   return "Night (0–6 h)"
+    if 6 <= h < 10:  return "Morning (6–10 h)"
+    if 10 <= h < 16: return "Midday (10–16 h)"
+    if 16 <= h < 20: return "Evening (16–20 h)"
+    return "Late night (20–24 h)"
 
-HOUR_ORDER = ["Night\n(0–6 h)", "Morning\n(6–10 h)", "Midday\n(10–16 h)",
-              "Evening\n(16–20 h)", "Late night\n(20–24 h)"]
+HOUR_ORDER = ["Night (0–6 h)", "Morning (6–10 h)", "Midday (10–16 h)",
+              "Evening (16–20 h)", "Late night (20–24 h)"]
 
 df["hour_bucket"] = pd.Categorical(
     df["pickup_hour"].apply(hour_bucket),
@@ -131,12 +159,12 @@ hour_rmse = segment_rmse(df, "hour_bucket")
 print("\n--- RMSE by time of day ---")
 print(hour_rmse.to_string(index=False))
 
-fig, ax = plt.subplots(figsize=(9, 5))
-rmse_bar(ax, hour_rmse, "Prediction error by time of day", "Time of day", "#59A14F")
+fig, ax = plt.subplots(figsize=(8, 4))
+rmse_bar(ax, hour_rmse, "RMSE by time of day", GREEN)
 fig.tight_layout()
-fig.savefig(FIGURES_DIR / "error_by_hour_bucket.png", dpi=150, bbox_inches="tight")
+fig.savefig(FIGURES_DIR / "error_by_hour.png", dpi=200, bbox_inches="tight", facecolor=BG)
 plt.close(fig)
-print("Saved: error_by_hour_bucket.png")
+print("Saved: error_by_hour.png")
 
 # ---------------------------------------------------------------------------
 # 3. By day type

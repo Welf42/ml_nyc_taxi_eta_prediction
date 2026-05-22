@@ -40,12 +40,20 @@ from sklearn.preprocessing import StandardScaler
 
 ROOT = Path(__file__).resolve().parents[1]
 IN_PATH = ROOT / "data" / "processed" / "train_features.csv"
-FIGURES_DIR = ROOT / "reports" / "figures" / "05_model_comparison"
+FIGURES_DIR = ROOT / "figures" / "05_models"
 MODELS_DIR = ROOT / "models"
 FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
-sns.set_theme(style="whitegrid")
+BG    = "#0d1117"
+FG    = "#F9FAFB"
+FAINT = "#D1D5DB"
+GRID  = "#1E2736"
+CYAN  = "#22D3EE"
+AMBER = "#F59E0B"
+GREEN = "#10B981"
+RED   = "#F87171"
+
 plt.rcParams.update({
     "font.family":       "sans-serif",
     "axes.titlesize":    13,
@@ -55,6 +63,20 @@ plt.rcParams.update({
     "ytick.labelsize":   10,
     "axes.spines.top":   False,
     "axes.spines.right": False,
+    "figure.facecolor":  BG,
+    "axes.facecolor":    BG,
+    "axes.edgecolor":    GRID,
+    "text.color":        FG,
+    "axes.labelcolor":   FG,
+    "xtick.color":       FAINT,
+    "ytick.color":       FAINT,
+    "axes.titlecolor":   FG,
+    "axes.grid":         True,
+    "grid.color":        GRID,
+    "grid.linewidth":    0.6,
+    "legend.facecolor":  "#1E2736",
+    "legend.edgecolor":  GRID,
+    "legend.labelcolor": FG,
 })
 
 FEATURE_LABELS = {
@@ -146,31 +168,23 @@ print(results_df.to_string(index=False))
 # RMSE comparison chart
 # ---------------------------------------------------------------------------
 
-palette = {"scikit-learn": "#4C78A8", "lightgbm": "#59A14F", "xgboost": "#F28E2B"}
-bar_colors = [palette[lib] for lib in results_df["library"]]
-
 fig, ax = plt.subplots(figsize=(8, 5))
 bars = ax.barh(
     results_df["model"][::-1],
     results_df["val_RMSE"][::-1],
-    color=bar_colors[::-1],
+    color=CYAN,
     height=0.55,
-    edgecolor="white",
+    edgecolor=BG,
 )
 for bar, val in zip(bars, results_df["val_RMSE"][::-1]):
     ax.text(val + 0.003, bar.get_y() + bar.get_height() / 2,
-            f"{val:.4f}", va="center", ha="left", fontsize=10, color="#333333")
-ax.set_xlabel("Validation RMSE  (log_trip_duration)")
+            f"{val:.4f}", va="center", ha="left", fontsize=10, color=FG)
+ax.set_xlabel("Validation RMSE  (log scale)")
 ax.set_title("Model comparison — OLS to gradient boosting")
 ax.set_xlim(0, results_df["val_RMSE"].max() * 1.15)
 
-from matplotlib.patches import Patch
-legend_elements = [Patch(facecolor=c, label=lib) for lib, c in palette.items()
-                   if lib in results_df["library"].values]
-ax.legend(handles=legend_elements, loc="lower right", fontsize=9)
-
 fig.tight_layout()
-fig.savefig(FIGURES_DIR / "model_comparison.png", dpi=150, bbox_inches="tight")
+fig.savefig(FIGURES_DIR / "model_comparison.png", dpi=200, bbox_inches="tight", facecolor=BG)
 plt.close(fig)
 print("\nSaved: model_comparison.png")
 
