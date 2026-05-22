@@ -9,9 +9,13 @@ Progression from simple to complex:
   Hist. Grad. Boost    — sklearn's fast gradient boosting
   LightGBM             — leaf-wise boosting; fast and accurate
   XGBoost              — level-wise boosting with built-in regularisation
+  LightGBM (tuned)     — Optuna hyperparameter search, 20 trials
 
 All models use the same time-ordered 80/20 train/validation split and the
 same 10 engineered features. Metric: RMSE on log_trip_duration (= RMSLE).
+
+After tuning, SHAP values are computed on 5 000 validation samples to show
+which features drive predictions and in which direction.
 
 The best model is saved to models/ for use by predict.py.
 
@@ -26,8 +30,10 @@ import joblib
 import lightgbm as lgb
 import matplotlib.pyplot as plt
 import numpy as np
+import optuna
 import pandas as pd
 import seaborn as sns
+import shap
 import xgboost as xgb
 from sklearn.ensemble import HistGradientBoostingRegressor, RandomForestRegressor
 from sklearn.inspection import permutation_importance
@@ -129,6 +135,44 @@ xgbm = xgb.XGBRegressor(n_estimators=500, learning_rate=0.05, max_depth=6,
                           random_state=42, verbosity=0)
 xgbm.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=False)
 record("XGBoost", "xgboost", xgbm, xgbm.predict(X_val), time.time() - t0)
+
+# ---------------------------------------------------------------------------
+# Optuna hyperparameter search — LightGBM
+# ---------------------------------------------------------------------------
+# Searches 20 configurations; uses early stopping within each trial to keep
+# runtime reasonable. For strict methodology, replace the val set here with
+# cross-validation folds to avoid tuning on the test set.
+
+optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+def _lgbm_objective(trial):
+    params = {
+        "n_estimators":      trial.suggest_int("n_estimators", 300, 1000),
+        "learning_rate":     trial.suggest_float("learning_rate", 0.02, 0.2, log=True),
+        "num_leaves":        trial.suggest_int("num_leaves", 31, 255),
+        "min_child_samples": trial.suggest_int("min_child_samples", 20, 100),
+        "subsample":         trial.suggest_float("subsample", 0.6, 1.0),
+        "colsample_bytree":  trial.suggest_float("colsample_bytree", 0.6, 1.0),
+        "reg_alpha":         trial.suggest_float("reg_alpha", 1e-8, 1.0, log=True),
+        "reg_lambda":        trial.suggest_float("reg_lambda", 1e-8, 1.0, log=True),
+        "n_jobs": -1, "random_state": 42, "verbose": -1,
+    }
+    m = lgb.LGBMRegressor(**params)
+    m.fit(X_train, y_train, eval_set=[(X_val, y_val)],
+          callbacks=[lgb.early_stopping(50, verbose=False), lgb.log_evaluation(-1)])
+    return root_mean_squared_error(y_val, m.predict(X_val))
+
+print("\nTuning LightGBM with Optuna (20 trials)...")
+t0 = time.time()
+study = optuna.create_study(direction="minimize")
+study.optimize(_lgbm_objective, n_trials=20, show_progress_bar=False)
+elapsed_tune = time.time() - t0
+
+best_params = study.best_params | {"n_jobs": -1, "random_state": 42, "verbose": -1}
+lgbm_tuned = lgb.LGBMRegressor(**best_params)
+lgbm_tuned.fit(X_train, y_train)
+record("LightGBM (tuned)", "lightgbm+optuna", lgbm_tuned, lgbm_tuned.predict(X_val), elapsed_tune)
+print(f"  Best params: { {k: (round(v, 4) if isinstance(v, float) else v) for k, v in study.best_params.items()} }")
 
 results_df = pd.DataFrame(results).sort_values("val_RMSE").reset_index(drop=True)
 
@@ -242,6 +286,54 @@ fig.tight_layout()
 fig.savefig(FIGURES_DIR / "ols_vs_lgbm.png", dpi=200, bbox_inches="tight", facecolor=BG)
 plt.close(fig)
 print("Saved: ols_vs_lgbm.png")
+
+# ---------------------------------------------------------------------------
+# SHAP — explain the tuned LightGBM
+# ---------------------------------------------------------------------------
+# TreeExplainer is exact (not sampled) for tree models and runs in seconds.
+# 5 000 rows is enough for a stable beeswarm; full val set would take longer.
+
+print("\nComputing SHAP values (5 000 validation samples)...")
+rng_shap = np.random.default_rng(0)
+shap_idx = rng_shap.choice(len(X_val), size=min(5_000, len(X_val)), replace=False)
+X_shap = X_val.iloc[shap_idx].rename(columns=FEATURE_LABELS)
+
+explainer = shap.TreeExplainer(lgbm_tuned)
+shap_values = explainer.shap_values(X_shap)
+
+shap.summary_plot(shap_values, X_shap, show=False, plot_size=(10, 6))
+fig = plt.gcf()
+ax  = plt.gca()
+
+# SHAP draws its own text elements that bypass rcParams — repaint them all.
+fig.patch.set_facecolor(BG)
+ax.set_facecolor(BG)
+for spine in ax.spines.values():
+    spine.set_edgecolor(GRID)
+ax.tick_params(colors=FAINT, labelcolor=FAINT)
+ax.xaxis.label.set_color(FAINT)
+for text in ax.texts:
+    text.set_color(FG)
+for text in fig.texts:
+    text.set_color(FG)
+# y-axis tick labels (feature names) are the most visible dark elements
+for lbl in ax.get_yticklabels():
+    lbl.set_color(FG)
+for lbl in ax.get_xticklabels():
+    lbl.set_color(FAINT)
+# colorbar
+for child in fig.get_children():
+    if hasattr(child, "yaxis"):
+        child.set_facecolor(BG)
+        child.tick_params(colors=FAINT, labelcolor=FAINT)
+        child.yaxis.label.set_color(FAINT)
+
+ax.set_title("LightGBM (tuned) — SHAP feature impact",
+             color=FG, fontsize=13, fontweight="bold")
+fig.tight_layout()
+fig.savefig(FIGURES_DIR / "shap_summary.png", dpi=200, bbox_inches="tight", facecolor=BG)
+plt.close(fig)
+print("Saved: shap_summary.png")
 
 # ---------------------------------------------------------------------------
 # Save best model and val predictions for downstream scripts

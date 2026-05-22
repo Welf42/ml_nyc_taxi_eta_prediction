@@ -76,33 +76,36 @@ pd.set_option("display.max_columns", 50)
 
 apply_theme()
 
-fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-
 upper_99 = train["trip_duration_min"].quantile(0.99)
 median_min = train["trip_duration_min"].median()
+
+fig, ax = plt.subplots(figsize=(8, 5))
 sns.histplot(
     train.loc[train["trip_duration_min"] <= upper_99, "trip_duration_min"],
-    bins=60, ax=axes[0], color=CYAN, edgecolor=BG, linewidth=0.3,
+    bins=60, ax=ax, color=CYAN, edgecolor=BG, linewidth=0.3,
 )
-axes[0].axvline(median_min, color=RED, linewidth=1.5, linestyle="--")
-axes[0].text(median_min + 0.5, axes[0].get_ylim()[1] * 0.92,
-             f"Median: {median_min:.0f} min", color=RED, fontsize=9)
-axes[0].set_title("Trip duration — raw")
-axes[0].set_xlabel("Duration (minutes)  —  clipped at 99th percentile")
-axes[0].set_ylabel("Trips")
-axes[0].yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"{int(x):,}"))
-
-sns.histplot(train["log_trip_duration"], bins=60, ax=axes[1],
-             color=GREEN, edgecolor=BG, linewidth=0.3)
-axes[1].set_title("Trip duration — log scale")
-axes[1].set_xlabel("log(1 + duration in seconds)")
-axes[1].set_ylabel("Trips")
-axes[1].yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"{int(x):,}"))
-
+ax.axvline(median_min, color=RED, linewidth=1.5, linestyle="--")
+ax.text(median_min + 0.5, ax.get_ylim()[1] * 0.92,
+        f"Median: {median_min:.0f} min", color=RED, fontsize=9)
+ax.set_title("Trip duration — raw")
+ax.set_xlabel("Duration (minutes)  —  clipped at 99th percentile")
+ax.set_ylabel("Trips")
+ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"{int(x):,}"))
 fig.tight_layout()
-fig.savefig(FIGURES_DIR / "trips_by_duration.png", dpi=200, bbox_inches="tight", facecolor=BG)
+fig.savefig(FIGURES_DIR / "trips_by_duration_raw.png", dpi=200, bbox_inches="tight", facecolor=BG)
 plt.close(fig)
-print("Saved: trips_by_duration.png")
+print("Saved: trips_by_duration_raw.png")
+
+fig, ax = plt.subplots(figsize=(8, 5))
+sns.histplot(train["log_trip_duration"], bins=60, ax=ax, color=GREEN, edgecolor=BG, linewidth=0.3)
+ax.set_title("Trip duration — log scale")
+ax.set_xlabel("log(1 + duration in seconds)")
+ax.set_ylabel("Trips")
+ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"{int(x):,}"))
+fig.tight_layout()
+fig.savefig(FIGURES_DIR / "trips_by_duration_log.png", dpi=200, bbox_inches="tight", facecolor=BG)
+plt.close(fig)
+print("Saved: trips_by_duration_log.png")
 
 # ---------------------------------------------------------------------------
 # Time patterns
@@ -116,25 +119,28 @@ train = train.assign(
 
 weekday_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
-fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-
-sns.countplot(data=train, x="pickup_hour", ax=axes[0], color=CYAN)
-axes[0].set_title("Trips by pickup hour")
-axes[0].set_xlabel("Hour of day")
-axes[0].set_ylabel("Trips")
-axes[0].yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"{int(x):,}"))
-
-sns.countplot(data=train, x="pickup_weekday", order=weekday_order, ax=axes[1], color=AMBER)
-axes[1].set_title("Trips by weekday")
-axes[1].set_xlabel("")
-axes[1].set_ylabel("Trips")
-axes[1].tick_params(axis="x", rotation=35)
-axes[1].yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"{int(x):,}"))
-
+fig, ax = plt.subplots(figsize=(8, 5))
+sns.countplot(data=train, x="pickup_hour", ax=ax, color=CYAN)
+ax.set_title("Trips by pickup hour")
+ax.set_xlabel("Hour of day")
+ax.set_ylabel("Trips")
+ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"{int(x):,}"))
 fig.tight_layout()
-fig.savefig(FIGURES_DIR / "trips_by_time.png", dpi=200, bbox_inches="tight", facecolor=BG)
+fig.savefig(FIGURES_DIR / "trips_by_hour.png", dpi=200, bbox_inches="tight", facecolor=BG)
 plt.close(fig)
-print("Saved: trips_by_time.png")
+print("Saved: trips_by_hour.png")
+
+fig, ax = plt.subplots(figsize=(8, 5))
+sns.countplot(data=train, x="pickup_weekday", order=weekday_order, ax=ax, color=AMBER)
+ax.set_title("Trips by weekday")
+ax.set_xlabel("")
+ax.set_ylabel("Trips")
+ax.tick_params(axis="x", rotation=35)
+ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"{int(x):,}"))
+fig.tight_layout()
+fig.savefig(FIGURES_DIR / "trips_by_weekday.png", dpi=200, bbox_inches="tight", facecolor=BG)
+plt.close(fig)
+print("Saved: trips_by_weekday.png")
 
 # ---------------------------------------------------------------------------
 # Passenger count and store-and-forward flag
