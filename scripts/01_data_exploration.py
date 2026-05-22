@@ -71,22 +71,35 @@ train = train.assign(
 
 sns.set_theme(style="whitegrid")
 pd.set_option("display.max_columns", 50)
+plt.rcParams.update({
+    "font.family":       "sans-serif",
+    "axes.titlesize":    13,
+    "axes.titleweight":  "bold",
+    "axes.labelsize":    11,
+    "xtick.labelsize":   10,
+    "ytick.labelsize":   10,
+    "axes.spines.top":   False,
+    "axes.spines.right": False,
+})
 
 fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
 upper_99 = train["trip_duration_min"].quantile(0.99)
 sns.histplot(
     train.loc[train["trip_duration_min"] <= upper_99, "trip_duration_min"],
-    bins=60,
-    ax=axes[0],
+    bins=60, ax=axes[0], color="#4C78A8", edgecolor="white", linewidth=0.3,
 )
-axes[0].set_title("Trip duration, clipped at 99th percentile")
-axes[0].set_xlabel("Duration (minutes)")
+axes[0].set_title("Trip duration distribution")
+axes[0].set_xlabel("Duration (minutes)  —  clipped at 99th percentile")
+axes[0].set_ylabel("Trips")
 
-sns.histplot(train["log_trip_duration"], bins=60, ax=axes[1])
+sns.histplot(train["log_trip_duration"], bins=60, ax=axes[1],
+             color="#59A14F", edgecolor="white", linewidth=0.3)
 axes[1].set_title("Log-transformed trip duration")
 axes[1].set_xlabel("log(1 + duration seconds)")
+axes[1].set_ylabel("Trips")
 
+fig.suptitle("Target variable: trip_duration", fontsize=14, fontweight="bold")
 fig.tight_layout()
 fig.savefig(FIGURES_DIR / "trip_duration_distribution.png", dpi=150, bbox_inches="tight")
 plt.close(fig)
@@ -108,15 +121,16 @@ fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
 sns.countplot(data=train, x="pickup_hour", ax=axes[0], color="#4C78A8")
 axes[0].set_title("Trips by pickup hour")
-axes[0].set_xlabel("Pickup hour")
+axes[0].set_xlabel("Hour of day")
 axes[0].set_ylabel("Trips")
 
 sns.countplot(data=train, x="pickup_weekday", order=weekday_order, ax=axes[1], color="#59A14F")
 axes[1].set_title("Trips by weekday")
-axes[1].set_xlabel("Pickup weekday")
+axes[1].set_xlabel("")
 axes[1].set_ylabel("Trips")
 axes[1].tick_params(axis="x", rotation=35)
 
+fig.suptitle("Temporal patterns in trip volume", fontsize=14, fontweight="bold")
 fig.tight_layout()
 fig.savefig(FIGURES_DIR / "trips_by_time.png", dpi=150, bbox_inches="tight")
 plt.close(fig)
@@ -138,9 +152,10 @@ axes[0].set_ylabel("Trips")
 
 sns.countplot(data=train, x="store_and_fwd_flag", ax=axes[1], color="#E15759")
 axes[1].set_title("Store-and-forward flag")
-axes[1].set_xlabel("Flag")
+axes[1].set_xlabel("N = recorded live  ·  Y = stored offline")
 axes[1].set_ylabel("Trips")
 
+fig.suptitle("Data quality checks", fontsize=14, fontweight="bold")
 fig.tight_layout()
 fig.savefig(FIGURES_DIR / "passenger_and_flag_counts.png", dpi=150, bbox_inches="tight")
 plt.close(fig)

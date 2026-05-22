@@ -1,84 +1,144 @@
-# ML NYC Taxi ETA Prediction
+# NYC Taxi ETA Prediction
 
-Predict taxi trip duration in New York City using the Kaggle NYC Taxi Trip Duration dataset.
+**Input:** pickup/dropoff coordinates + time of day
+**Output:** estimated trip duration in minutes
+**Data:** 1.45 million NYC taxi trips (Jan–Jun 2016)
+**Result:** LightGBM model, 32% more accurate than a statistical baseline — deployable as a prediction tool via `predict.py`
 
-This is a practical lab for the **Machine Learning for Urban Mobility** theory page at `welf.dev/labs/ai-intro`. The theory page explains when ML is useful in transport planning; this repository applies those ideas to one concrete transport problem.
+Built as part of the [Machine Learning for Urban Mobility](https://welf.dev/labs/ai-intro) lab series.
 
-## Problem
+---
 
-Given a taxi trip's pickup time, pickup/dropoff locations, and trip attributes, estimate how long the trip will take.
+## What this project does
 
-The project is solving an **ETA prediction** problem: turning historical taxi trips into a model that can support more reliable travel-time estimates.
+Given what a taxi dispatcher knows at the moment of pickup — location, destination, and time — the model estimates how long the trip will take.
 
-## Why ML?
+The full pipeline goes from raw CSV data to a working prediction tool:
+1. **Explore** the raw data — distributions, time patterns, coordinate ranges
+2. **Clean** invalid trips — GPS errors, impossible durations, out-of-range coordinates
+3. **Engineer features** — straight-line distance, bearing, hour, weekday, rush-hour flag
+4. **Baseline** — OLS regression establishes what a simple statistical model achieves
+5. **Compare models** — Random Forest, Gradient Boosting, LightGBM, XGBoost
+6. **Analyse errors** — segment RMSE by distance and time to understand where the model is reliable
 
-Trip duration is uncertain. It depends on time of day, location, distance, traffic patterns, and operational conditions that are hard to capture with one fixed rule.
+---
 
-ML is useful here because the project has historical examples of completed trips and a clear target to learn from. This is not a simple deterministic calculation, a shortest-path routing problem, or a safety-critical automation system. The model estimates travel time; it does not replace routing logic or human planning judgment.
+## Results
 
-## ML Framing
+### Model comparison
 
-- **Task type:** Regression
-- **Target variable:** Trip duration
-- **Why regression:** The model predicts a continuous value, not a class, future time series, or hidden group.
-- **Not used here:** Classification, forecasting, and clustering.
+Trained on 1,157,960 trips (Jan–May 2016) · Validated on 289,490 trips (Jun 2016)
 
-## Python Stack
+| Model | Val RMSE | vs. baseline |
+|---|---|---|
+| Naive (predict mean) | 0.7446 | — |
+| OLS regression | 0.5514 | −26% |
+| Random Forest | 0.3839 | −48% |
+| Hist. Gradient Boosting | 0.3778 | −49% |
+| XGBoost | 0.3765 | −49% |
+| **LightGBM** | **0.3764** | **−49%** |
 
-This project uses a classical machine learning stack:
+**What is RMSE?** Root Mean Squared Error measures average prediction error. Because the model predicts log(trip duration), an RMSE of 0.3764 means predictions are within roughly ±46% of the actual duration on average. For a 30-minute trip that is a ±14-minute window; for a 10-minute trip, ±5 minutes. Lower is better.
 
-- **pandas:** load, clean, and inspect trip data.
-- **numpy:** numeric calculations.
-- **scikit-learn:** train/test split, preprocessing, baseline models, regression models, and metrics.
-- **matplotlib/seaborn:** charts for exploration and error analysis.
+### Where the model is reliable
 
-PyTorch and TensorFlow are not planned for this project. They are mainly used for neural networks, such as computer vision, deep time-series models, text models, or graph neural networks.
+| Trip type | RMSE | Interpretation |
+|---|---|---|
+| Very long trips (> 7 km) | 0.257 | ±29% error — reliable enough for dispatching |
+| Long trips (3–7 km) | 0.301 | ±35% error — good |
+| Medium trips (1–3 km) | 0.367 | ±44% error — acceptable |
+| Short trips (< 1 km) | 0.537 | ±71% error — use with caution |
+| Night (0–6 h) | 0.330 | most predictable window |
+| Midday (10–16 h) | 0.408 | highest variance — unpredictable traffic mix |
 
-## Workflow
+---
 
-This project follows the same high-level ML workflow from the theory page:
+## Getting Started
 
-1. **Problem framing:** predict taxi trip duration.
-2. **Data:** use historical NYC taxi trips from Kaggle.
-3. **Feature engineering:** create time, distance, and location-based features.
-4. **Baseline model:** compare against a simple duration estimate before using complex models.
-5. **Model:** start simple, then test stronger regression models.
-6. **Evaluation:** measure error globally and by segment, such as hour, distance, or area.
-7. **Decision layer:** translate model errors into transport insight, such as where ETA reliability is weak.
+### 1. Get the data
 
-## Roadmap
+Download the **NYC Taxi Trip Duration** dataset from Kaggle:
+[kaggle.com/c/nyc-taxi-trip-duration/data](https://www.kaggle.com/c/nyc-taxi-trip-duration/data)
 
-- [ ] Load the raw Kaggle data.
-- [ ] Explore trip duration, locations, time patterns, and outliers.
-- [ ] Clean invalid or unrealistic trips.
-- [ ] Build time, distance, and location-based features.
-- [ ] Create a simple baseline model.
-- [ ] Train and compare regression models.
-- [ ] Evaluate errors by segment and document findings.
-
-## Data
-
-Raw data is not committed to this repository. Download it from Kaggle and place it under `data/raw/`.
-
-See [`data/README.md`](data/README.md) for the expected local file structure.
-
-## Setup
-
-Create a local virtual environment and install the project dependencies:
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+Place the files in `data/raw/`:
+```
+data/raw/
+├── train.csv
+└── test.csv
 ```
 
-Register the environment as a notebook kernel:
+The raw data is not included in this repository — Kaggle's terms of service prohibit redistribution of competition datasets.
+
+### 2. Set up the environment
 
 ```bash
-python -m ipykernel install --user --name ml-nyc-taxi-eta --display-name "Python (.venv) - NYC Taxi ETA"
+make install
 ```
 
-## Status
+Creates a `.venv`, upgrades pip, and installs all dependencies from `requirements.txt`.
 
-In progress. The repository will grow from data exploration to features, baseline models, evaluation, and interpretation.
+### 3. Run the full pipeline
+
+```bash
+make pipeline
+```
+
+Runs all six scripts in order. Outputs: charts in `reports/figures/`, trained model in `models/`.
+
+### 4. Predict a trip
+
+```bash
+python predict.py <pickup_lat> <pickup_lon> <dropoff_lat> <dropoff_lon> <hour> <weekday>
+```
+
+Arguments: coordinates (decimal degrees), hour (0–23), weekday (0=Monday, 6=Sunday).
+
+```bash
+# Midtown Manhattan to JFK Airport, Monday evening rush hour
+python predict.py 40.754 -73.984 40.641 -73.778 17 0
+```
+```
+Trip summary
+  Distance  : 21.44 km
+  Departure : Monday at 17:00
+  Estimated : 68.6 minutes
+```
+
+Requires `make pipeline` to have been run first.
+
+---
+
+## Project Structure
+
+```
+scripts/
+  01_data_exploration.py      explore target distribution, locations, time patterns
+  02_clean_data.py            remove invalid trips; writes data/processed/train_clean.csv
+  03_feature_engineering.py   haversine distance, bearing, time features; writes train_features.csv
+  04_baseline_model.py        OLS regression with RMSE evaluation and residual diagnostics
+  05_model_comparison.py      train all 5 models; saves best model to models/
+  06_error_analysis.py        segment RMSE by distance, time of day, and day type
+
+predict.py                    predict trip duration from coordinates and time
+Makefile                      install, pipeline, clean
+
+data/
+  raw/                        not included — download from Kaggle
+  processed/                  generated by pipeline — gitignored
+
+models/                       saved best model — generated by pipeline — gitignored
+reports/figures/              charts organised by script number — gitignored
+```
+
+---
+
+## Stack
+
+| Library | Purpose |
+|---|---|
+| pandas | data loading, cleaning, feature engineering |
+| numpy | numeric calculations |
+| scikit-learn | OLS, Random Forest, Hist. Gradient Boosting, metrics |
+| lightgbm | LightGBM gradient boosting |
+| xgboost | XGBoost gradient boosting |
+| matplotlib / seaborn | charts |

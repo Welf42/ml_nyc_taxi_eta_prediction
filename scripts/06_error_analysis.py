@@ -38,7 +38,7 @@ from sklearn.metrics import root_mean_squared_error
 
 ROOT = Path(__file__).resolve().parents[1]
 IN_PATH = ROOT / "data" / "processed" / "val_predictions.csv"
-FIGURES_DIR = ROOT / "reports" / "figures" / "07_error_analysis"
+FIGURES_DIR = ROOT / "reports" / "figures" / "06_error_analysis"
 FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 
 sns.set_theme(style="whitegrid")
